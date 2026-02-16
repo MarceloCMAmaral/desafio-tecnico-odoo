@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- ENTRADA DE COMBUSTÍVEL — Views                                      -->
+    <!-- ================================================================== -->
+
+    <!-- Form View -->
+    <record id="view_entrada_combustivel_form" model="ir.ui.view">
+        <field name="name">controle.combustivel.entrada.form</field>
+        <field name="model">controle.combustivel.entrada</field>
+        <field name="arch" type="xml">
+            <form string="Entrada de Combustível">
+                <sheet>
+                    <group>
+                        <group string="Dados da Entrada">
+                            <field name="tanque_id"/>
+                            <field name="data"/>
+                            <field name="litros"/>
+                        </group>
+                        <group string="Rastreabilidade">
+                            <field name="referencia"
+                                   placeholder="Nº NF, pedido de compra..."/>
+                            <field name="responsavel_id"/>
+                        </group>
+                    </group>
+                    <group string="Observações">
+                        <field name="observacao" nolabel="1"
+                               placeholder="Observações sobre esta entrada..."/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List/Tree View -->
+    <record id="view_entrada_combustivel_list" model="ir.ui.view">
+        <field name="name">controle.combustivel.entrada.list</field>
+        <field name="model">controle.combustivel.entrada</field>
+        <field name="arch" type="xml">
+            <list string="Entradas de Combustível"
+                  default_order="data desc">
+                <field name="data"/>
+                <field name="tanque_id"/>
+                <field name="litros" sum="Total Entradas"/>
+                <field name="referencia"/>
+                <field name="responsavel_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_entrada_combustivel_search" model="ir.ui.view">
+        <field name="name">controle.combustivel.entrada.search</field>
+        <field name="model">controle.combustivel.entrada</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Entradas">
+                <field name="referencia"/>
+                <field name="tanque_id"/>
+                <field name="responsavel_id"/>
+                <separator/>
+                <filter string="Hoje" name="today"
+                        domain="[('data', '&gt;=', (context_today()).strftime('%Y-%m-%d')),
+                                 ('data', '&lt;', (context_today() + datetime.timedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <filter string="Este Mês" name="month"
+                        domain="[('data', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
+                <separator/>
+                    <filter string="Tanque" name="group_tanque"
+                            context="{'group_by': 'tanque_id'}"/>
+                    <filter string="Mês" name="group_mes"
+                            context="{'group_by': 'data:month'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_entrada_combustivel" model="ir.actions.act_window">
+        <field name="name">Entradas de Combustível</field>
+        <field name="res_model">controle.combustivel.entrada</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Registre a primeira entrada de combustível!
+            </p>
+            <p>
+                Entradas representam recebimentos de combustível no tanque.
+                Podem ser manuais ou automáticas (via recebimento de compras).
+            </p>
+        </field>
+    </record>
+</odoo>

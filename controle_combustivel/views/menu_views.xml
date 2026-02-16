@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- MENUS — Controle de Combustível                                     -->
+    <!-- ================================================================== -->
+
+    <!-- Menu raiz (aparece no menu principal do Odoo) -->
+    <menuitem id="menu_combustivel_root"
+              name="Combustível"
+              web_icon="controle_combustivel,static/description/icon.png"
+              sequence="50"/>
+
+    <!-- Submenu: Operações -->
+    <menuitem id="menu_combustivel_operacoes"
+              name="Operações"
+              parent="menu_combustivel_root"
+              sequence="10"/>
+
+    <menuitem id="menu_abastecimento"
+              name="Abastecimentos"
+              parent="menu_combustivel_operacoes"
+              action="action_abastecimento"
+              sequence="10"/>
+
+    <menuitem id="menu_entrada"
+              name="Entradas de Combustível"
+              parent="menu_combustivel_operacoes"
+              action="action_entrada_combustivel"
+              sequence="20"/>
+
+    <!-- Submenu: Configuração -->
+    <menuitem id="menu_combustivel_config"
+              name="Configuração"
+              parent="menu_combustivel_root"
+              sequence="90"
+              groups="group_combustivel_manager"/>
+
+    <menuitem id="menu_tanque"
+              name="Tanques"
+              parent="menu_combustivel_config"
+              action="action_tanque_combustivel"
+              sequence="10"/>
+</odoo>

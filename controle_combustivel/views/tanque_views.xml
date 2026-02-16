@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- TANQUE DE COMBUSTÍVEL — Views                                       -->
+    <!-- ================================================================== -->
+
+    <!-- Form View -->
+    <record id="view_tanque_combustivel_form" model="ir.ui.view">
+        <field name="name">controle.combustivel.tanque.form</field>
+        <field name="model">controle.combustivel.tanque</field>
+        <field name="arch" type="xml">
+            <form string="Tanque de Combustível">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome do Tanque"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Capacidade">
+                            <field name="capacidade_maxima"/>
+                            <field name="estoque_atual"/>
+                            <field name="percentual_estoque" widget="progressbar"/>
+                        </group>
+                        <group string="Configuração">
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Entradas" name="entradas">
+                            <field name="entrada_ids">
+                                <list>
+                                    <field name="data"/>
+                                    <field name="litros"/>
+                                    <field name="referencia"/>
+                                    <field name="responsavel_id"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Abastecimentos" name="abastecimentos">
+                            <field name="abastecimento_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="data_hora"/>
+                                    <field name="equipamento_id"/>
+                                    <field name="litros"/>
+                                    <field name="total"/>
+                                    <field name="motorista_id"/>
+                                    <field name="state" widget="badge"
+                                           decoration-success="state == 'done'"
+                                           decoration-info="state == 'draft'"
+                                           decoration-danger="state == 'cancel'"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List/Tree View -->
+    <record id="view_tanque_combustivel_list" model="ir.ui.view">
+        <field name="name">controle.combustivel.tanque.list</field>
+        <field name="model">controle.combustivel.tanque</field>
+        <field name="arch" type="xml">
+            <list string="Tanques de Combustível">
+                <field name="name"/>
+                <field name="capacidade_maxima"/>
+                <field name="estoque_atual"/>
+                <field name="percentual_estoque" widget="progressbar"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_tanque_combustivel_search" model="ir.ui.view">
+        <field name="name">controle.combustivel.tanque.search</field>
+        <field name="model">controle.combustivel.tanque</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Tanques">
+                <field name="name"/>
+                <filter string="Ativos" name="active"
+                        domain="[('active', '=', True)]"/>
+                <filter string="Arquivados" name="archived"
+                        domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_tanque_combustivel" model="ir.actions.act_window">
+        <field name="name">Tanques de Combustível</field>
+        <field name="res_model">controle.combustivel.tanque</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Cadastre seu primeiro tanque de combustível!
+            </p>
+            <p>
+                Tanques armazenam combustível e controlam entradas e saídas (abastecimentos).
+            </p>
+        </field>
+    </record>
+</odoo>

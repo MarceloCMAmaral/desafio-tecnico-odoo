@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- ABASTECIMENTO — Views                                               -->
+    <!-- ================================================================== -->
+
+    <!-- Form View -->
+    <record id="view_abastecimento_form" model="ir.ui.view">
+        <field name="name">controle.combustivel.abastecimento.form</field>
+        <field name="model">controle.combustivel.abastecimento</field>
+        <field name="arch" type="xml">
+            <form string="Abastecimento">
+                <header>
+                    <button name="action_confirm" type="object"
+                            string="Confirmar" class="oe_highlight"
+                            invisible="state != 'draft'"
+                            confirm="Deseja confirmar este abastecimento? O estoque do tanque será atualizado."/>
+                    <button name="action_cancel" type="object"
+                            string="Cancelar"
+                            invisible="state != 'done'"
+                            confirm="Deseja cancelar este abastecimento? O estoque será devolvido ao tanque."/>
+                    <button name="action_draft" type="object"
+                            string="Voltar a Rascunho"
+                            invisible="state != 'cancel'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Veículo / Equipamento">
+                            <field name="equipamento_id"
+                                   readonly="state != 'draft'"/>
+                            <field name="data_hora"
+                                   readonly="state != 'draft'"/>
+                            <field name="horimetro_odometro"
+                                   readonly="state != 'draft'"/>
+                            <field name="motorista_id"
+                                   readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Combustível">
+                            <field name="tanque_id"
+                                   readonly="state != 'draft'"/>
+                            <field name="litros"
+                                   readonly="state != 'draft'"/>
+                            <field name="valor_litro"
+                                   readonly="state != 'draft'"/>
+                            <field name="total" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Responsável">
+                            <field name="responsavel_id"
+                                   readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <group string="Observações">
+                        <field name="observacao" nolabel="1"
+                               placeholder="Observações sobre este abastecimento..."
+                               readonly="state != 'draft'"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List/Tree View -->
+    <record id="view_abastecimento_list" model="ir.ui.view">
+        <field name="name">controle.combustivel.abastecimento.list</field>
+        <field name="model">controle.combustivel.abastecimento</field>
+        <field name="arch" type="xml">
+            <list string="Abastecimentos"
+                  decoration-muted="state == 'cancel'"
+                  decoration-info="state == 'draft'"
+                  default_order="data_hora desc">
+                <field name="name"/>
+                <field name="equipamento_id"/>
+                <field name="data_hora"/>
+                <field name="litros"/>
+                <field name="valor_litro"/>
+                <field name="total" sum="Total Geral"/>
+                <field name="motorista_id"/>
+                <field name="tanque_id"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-info="state == 'draft'"
+                       decoration-danger="state == 'cancel'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_abastecimento_search" model="ir.ui.view">
+        <field name="name">controle.combustivel.abastecimento.search</field>
+        <field name="model">controle.combustivel.abastecimento</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Abastecimentos">
+                <field name="name"/>
+                <field name="equipamento_id"/>
+                <field name="motorista_id"/>
+                <field name="tanque_id"/>
+                <separator/>
+                <filter string="Rascunho" name="draft"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter string="Confirmados" name="done"
+                        domain="[('state', '=', 'done')]"/>
+                <filter string="Cancelados" name="cancel"
+                        domain="[('state', '=', 'cancel')]"/>
+                <separator/>
+                <filter string="Hoje" name="today"
+                        domain="[('data_hora', '&gt;=', (context_today()).strftime('%Y-%m-%d')),
+                                 ('data_hora', '&lt;', (context_today() + datetime.timedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <filter string="Esta Semana" name="week"
+                        domain="[('data_hora', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                <filter string="Este Mês" name="month"
+                        domain="[('data_hora', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
+                <separator/>
+                    <filter string="Equipamento" name="group_equipamento"
+                            context="{'group_by': 'equipamento_id'}"/>
+                    <filter string="Motorista" name="group_motorista"
+                            context="{'group_by': 'motorista_id'}"/>
+                    <filter string="Tanque" name="group_tanque"
+                            context="{'group_by': 'tanque_id'}"/>
+                    <filter string="Mês" name="group_mes"
+                            context="{'group_by': 'data_hora:month'}"/>
+                    <filter string="Estado" name="group_state"
+                            context="{'group_by': 'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_abastecimento" model="ir.actions.act_window">
+        <field name="name">Abastecimentos</field>
+        <field name="res_model">controle.combustivel.abastecimento</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_done': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Registre seu primeiro abastecimento!
+            </p>
+            <p>
+                Selecione o equipamento, informe a quantidade de litros
+                e o valor por litro. O total será calculado automaticamente.
+            </p>
+        </field>
+    </record>
+</odoo>

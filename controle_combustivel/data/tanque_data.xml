@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Tanque padrão com capacidade de 6.000L conforme especificação -->
+    <record id="tanque_principal" model="controle.combustivel.tanque">
+        <field name="name">Tanque Principal — 6.000L</field>
+        <field name="capacidade_maxima">6000.0</field>
+    </record>
+</odoo>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- STOCK.PICKING — Extensão de view para integração combustível        -->
+    <!-- Adiciona smart button ao formulário de recebimento quando           -->
+    <!-- o picking gerou entradas de combustível no tanque.                  -->
+    <!-- ================================================================== -->
+
+    <record id="view_picking_form_inherit_combustivel" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.combustivel</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_combustivel_entradas"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-tint"
+                        invisible="combustivel_entrada_count == 0">
+                    <field name="combustivel_entrada_count"
+                           widget="statinfo"
+                           string="Entradas Combustível"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

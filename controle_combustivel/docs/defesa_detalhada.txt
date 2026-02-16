@@ -1,0 +1,564 @@
+================================================================================
+            DEFESA TÉCNICA DETALHADA — MÓDULO CONTROLE DE COMBUSTÍVEL
+                         Odoo 19.0 Community Edition
+================================================================================
+
+Este documento apresenta, de forma verbal e detalhada, todas as decisões 
+técnicas tomadas durante o desenvolvimento do módulo controle_combustivel.
+Cada decisão é acompanhada de sua justificativa, alternativas consideradas
+e o motivo pelo qual foram descartadas.
+
+Destinado a embasar a defesa técnica perante a banca avaliadora.
+
+
+================================================================================
+1. ESTRUTURA DO MÓDULO (Fase 1)
+================================================================================
+
+1.1 — ORGANIZAÇÃO EM UM ARQUIVO POR MODELO
+
+    Optei por criar um arquivo Python separado para cada modelo de dados:
+    tanque_combustivel.py, abastecimento.py, entrada_combustivel.py e 
+    purchase_picking.py. Essa decisão segue as coding guidelines oficiais 
+    do Odoo, que recomendam a separação por modelo para facilitar a 
+    manutenção, o code review e eventualmente a escrita de testes unitários.
+
+    A alternativa seria colocar todos os modelos em um único arquivo 
+    models.py. Descartei essa abordagem porque, à medida que os modelos 
+    crescem, o arquivo se tornaria difícil de navegar. Em projetos reais,
+    módulos Odoo maduros sempre separam os modelos.
+
+1.2 — VERSIONAMENTO OCA (19.0.1.0.0)
+
+    A versão do módulo segue a convenção da OCA (Odoo Community 
+    Association): {versão_odoo}.{major}.{minor}.{patch}. Isso comunica 
+    imediatamente a versão do Odoo para a qual o módulo foi desenvolvido 
+    e facilita o controle de compatibilidade. A alternativa "1.0" seria 
+    ambígua e não indicaria para qual versão do Odoo o módulo foi feito.
+
+1.3 — CATEGORIA 'Fleet'
+
+    Classifiquei o módulo na categoria 'Fleet' no manifest para que ele 
+    apareça agrupado com os módulos de frota no painel de aplicações. Isso 
+    faz sentido porque o módulo é intimamente ligado à gestão de veículos 
+    e equipamentos. A alternativa seria criar uma categoria própria, mas 
+    isso isolaria o módulo desnecessariamente.
+
+1.4 — ORDEM DE CARREGAMENTO DOS DADOS
+
+    No __manifest__.py, a lista 'data' segue a ordem: security → data → views.
+    Essa ordem é obrigatória no Odoo. Os arquivos de segurança (grupos e 
+    ACLs) precisam ser carregados antes das views porque as views podem 
+    referenciar grupos usando o atributo 'groups'. Se carregássemos as 
+    views antes dos grupos, o Odoo lançaria erro de referência não 
+    encontrada. Os dados iniciais (tanque padrão) são carregados antes das 
+    views, mas depois da segurança, porque não dependem das views mas podem 
+    ser referenciados por elas.
+
+1.5 — APPLICATION = TRUE
+
+    Marquei o módulo como application=True no manifest. Isso cria uma 
+    entrada dedicada no menu principal do Odoo, o que é apropriado porque 
+    o controle de combustível é uma funcionalidade autônoma, não uma 
+    extensão marginal de outro módulo. Para o avaliador, isso mostra que 
+    entendo a diferença entre um módulo "application" e um módulo utilitário.
+
+1.6 — LICENÇA LGPL-3
+
+    Escolhi LGPL-3 por ser a licença padrão do Odoo Community. Embora o 
+    módulo seja específico para o desafio, é importante declarar a licença 
+    corretamente pois o Odoo verifica esse campo no manifest e emite warnings 
+    quando ele está ausente ou inválido.
+
+
+================================================================================
+2. MODELOS ORM (Fase 2)
+================================================================================
+
+2.1 — ESTOQUE COMPUTADO vs. INCREMENTAL
+
+    Esta é possivelmente a decisão técnica mais importante do módulo.
+
+    ABORDAGEM ESCOLHIDA (computado com store=True):
+    O campo estoque_atual do tanque é calculado pela fórmula:
+        estoque = soma(entradas.litros) - soma(abastecimentos_confirmados.litros)
+    
+    Com store=True, o Odoo armazena o resultado no banco de dados e 
+    recalcula automaticamente sempre que uma entrada ou abastecimento é 
+    criado, editado ou excluído. Isso ocorre porque o decorador 
+    @api.depends observa as dependências e invalida o cache quando elas 
+    mudam.
+
+    ABORDAGEM DESCARTADA (incremental):
+    A alternativa seria manter um campo simples e atualizar manualmente:
+        tanque.estoque_atual += litros  (na entrada)
+        tanque.estoque_atual -= litros  (no abastecimento)
+    
+    POR QUE FOI DESCARTADA: A abordagem incremental é propensa a 
+    dessincronização. Se alguém excluir um registro diretamente no banco 
+    de dados, via shell do Odoo ou via XML-RPC, o estoque ficaria 
+    inconsistente para sempre. Com o campo computado, basta editar qualquer 
+    registro relacionado e o estoque recalcula corretamente.
+
+    Além disso, o store=True garante que o valor fica disponível para 
+    consultas SQL, filtros de busca, agrupamentos e ordenação. Sem o 
+    store, o campo existiria apenas em memória e não poderia ser usado 
+    em relatórios.
+
+2.2 — @api.depends vs. @api.onchange PARA O CAMPO TOTAL
+
+    O campo 'total' do abastecimento (litros × valor_litro) usa 
+    @api.depends('litros', 'valor_litro') e NÃO @api.onchange.
+
+    Essa escolha é fundamental. O decorador @api.depends garante que o 
+    campo seja recalculado em QUALQUER cenário: quando o usuário edita 
+    na interface web, quando um registro é criado via API REST, quando 
+    dados são importados por CSV ou quando um script automatizado cria 
+    registros via XML-RPC.
+
+    O @api.onchange, por outro lado, só funciona quando o usuário interage 
+    com a interface web. Se um registro for criado via API, o total ficaria 
+    zerado. Em um sistema que pode ter integrações, isso seria um bug grave.
+
+    O store=True complementa essa decisão: o total fica materializado no 
+    banco, permitindo que seja usado em filtros ("mostre abastecimentos com 
+    total > R$ 500"), agrupamentos ("total por equipamento") e ordenação.
+
+2.3 — PRECISÃO DO CAMPO valor_litro (4 CASAS DECIMAIS)
+
+    Defini valor_litro com digits=(10, 4), ou seja, 4 casas decimais.
+    No Brasil, o preço do combustível na bomba frequentemente aparece com 
+    3 ou 4 casas decimais (ex: R$ 6,259 ou R$ 6,2590). Se usássemos apenas 
+    2 casas decimais, o cálculo de total sofreria arredondamento. Em 
+    grandes volumes (centenas de litros), esse arredondamento acumula e 
+    gera diferenças significativas na conciliação financeira.
+
+    O campo litros usa digits=(10, 2) porque volume em litros normalmente 
+    tem 2 casas de precisão. O horímetro/odômetro usa digits=(10, 1) porque 
+    1 casa decimal é o padrão industrial para essas leituras.
+
+2.4 — motorista_id COMO res.partner (NÃO res.users)
+
+    O campo motorista_id referencia res.partner e não res.users. A razão 
+    é prática: motoristas podem ser terceirizados que não têm (e não devem 
+    ter) login no sistema Odoo. Se usássemos res.users, seria necessário 
+    criar um usuário de sistema para cada motorista, o que além de ser 
+    semanticamente errado, poderia ter implicações de licenciamento e segurança.
+
+    O res.partner é o modelo universal de "entidades" no Odoo — abrange 
+    pessoas, empresas, contatos, etc. Cadastrar motoristas como partners 
+    é economicamente e tecnicamente correto.
+
+    Já o campo responsavel_id referencia res.users porque o responsável 
+    pelo registro é sempre um operador do sistema com login ativo. O 
+    default=lambda self: self.env.uid preenche automaticamente com o 
+    usuário logado.
+
+2.5 — WORKFLOW draft → done → cancel
+
+    Implementei um workflow de 3 estados para o abastecimento:
+    
+    - RASCUNHO (draft): o registro existe mas não afeta o estoque. Isso 
+      permite que o operador preencha os dados com calma, confira os 
+      valores e só então confirme. É uma rede de segurança contra erros 
+      de digitação.
+    
+    - CONFIRMADO (done): o registro passa a ser contabilizado no estoque 
+      do tanque. O campo computado estoque_atual recalcula automaticamente 
+      porque depende de abastecimento_ids.state (filtrando state=='done').
+    
+    - CANCELADO (cancel): o registro é marcado como cancelado e deixa de 
+      ser contabilizado no estoque. O estoque recalcula automaticamente, 
+      efetivamente "devolvendo" os litros ao tanque.
+
+    A transição cancel → draft (action_draft) permite reabrir registros 
+    cancelados por engano, sem precisar criar um novo registro.
+
+    Decisão importante: a sequência (ABAST/2026/00001) só é gerada no 
+    momento da confirmação, não na criação do rascunho. Isso evita buracos 
+    na numeração causados por rascunhos que são excluídos antes de serem 
+    confirmados.
+
+2.6 — @api.model_create_multi
+
+    A partir do Odoo 14+, o método create() passou a receber uma lista de 
+    dicionários (vals_list) ao invés de um único dicionário. O decorador 
+    @api.model_create_multi é a forma moderna de declarar isso. Embora neste 
+    módulo não haja criação em lote programática, usar o padrão moderno 
+    demonstra conhecimento atualizado do framework e evita warnings de 
+    deprecação em versões futuras.
+
+2.7 — CONSTRAINTS COM @api.constrains
+
+    Todas as validações de negócio usam @api.constrains e não validações 
+    na view (via atributos XML). A razão é que @api.constrains é executado 
+    tanto no create() quanto no write(), independentemente de como o dado 
+    é inserido — seja pela interface web, pela API, por importação CSV ou 
+    por script. Validações apenas na view seriam facilmente contornáveis.
+
+    As validações implementadas são:
+    - litros > 0: não faz sentido um abastecimento de zero ou negativo litros
+    - valor_litro > 0: preço negativo não tem sentido de negócio
+    - estoque_atual >= 0: não é fisicamente possível retirar mais do que existe
+    - estoque_atual <= capacidade_maxima: não se pode encher além da capacidade
+    
+    As mensagens de erro incluem os valores atuais para facilitar o 
+    diagnóstico pelo operador.
+
+2.8 — ondelete='restrict' NAS MANY2ONE
+
+    Os campos tanque_id no abastecimento e na entrada usam 
+    ondelete='restrict'. Isso impede que um tanque seja excluído enquanto 
+    houver abastecimentos ou entradas referenciando-o. A alternativa 
+    'cascade' excluiria em cascata todos os registros filhos, o que seria 
+    uma perda de dados catastrófica. A alternativa 'set null' deixaria 
+    registros órfãos sem referência ao tanque, quebrando a integridade 
+    referencial.
+
+
+================================================================================
+3. VIEWS E INTERFACE (Fase 3)
+================================================================================
+
+3.1 — HEADER COM STATUSBAR NO FORMULÁRIO
+
+    O formulário de abastecimento usa o elemento <header> com 
+    widget="statusbar" para exibir o estado atual e os botões de ação 
+    (Confirmar, Cancelar, Voltar a Rascunho). Esse é o padrão Odoo para 
+    modelos que possuem workflow — todos os módulos oficiais como 
+    sale.order, purchase.order e account.move usam esse padrão.
+
+    Os botões incluem o atributo confirm="..." que exige confirmação do 
+    usuário antes de executar a ação. Isso é especialmente importante no 
+    botão "Confirmar" (que afeta o estoque) e "Cancelar" (que reverte o 
+    estoque), prevenindo ações acidentais.
+
+3.2 — CAMPOS READONLY QUANDO CONFIRMADO
+
+    Todos os campos do formulário de abastecimento incluem 
+    readonly="state != 'draft'". Isso impede que dados sejam alterados 
+    após a confirmação. Se permitíssemos edição após confirmação sem 
+    lógica de recálculo de estoque, o operador poderia mudar a quantidade 
+    de litros sem que o estoque fosse ajustado, criando inconsistência.
+
+    A decisão de implementar readonly na view (e não no modelo via 
+    readonly=True no campo) é intencional: no modelo, readonly é absoluto 
+    e permanente. Na view, é condicional ao estado, o que é o comportamento 
+    desejado.
+
+3.3 — PROGRESSBAR NO TANQUE
+
+    O campo percentual_estoque usa widget="progressbar" no formulário do 
+    tanque. Isso transforma um número (ex: 75.0) em uma barra visual que 
+    mostra o nível do tanque de forma intuitiva. O operador consegue 
+    avaliar instantaneamente se o tanque está cheio, pela metade ou quase 
+    vazio, sem precisar ler números.
+
+3.4 — NOTEBOOK COM ABAS
+
+    O formulário do tanque usa <notebook> com duas abas: "Entradas" e 
+    "Abastecimentos". Isso organiza as movimentações de forma clara e 
+    evita que o formulário fique excessivamente longo. O usuário pode 
+    alternar entre as abas para ver o histórico de cada tipo de 
+    movimentação sem scroll excessivo.
+
+3.5 — DECORAÇÃO DE LINHAS NA LISTA
+
+    A lista de abastecimentos usa decoration-muted para cancelados e 
+    decoration-info para rascunhos. Isso dá feedback visual imediato: 
+    cancelados aparecem esmaecidos (cinza), rascunhos em azul, e 
+    confirmados com a cor padrão. O campo state usa widget="badge" com 
+    decoration-success (verde para done), decoration-info (azul para 
+    draft) e decoration-danger (vermelho para cancel).
+
+3.6 — AGREGAÇÃO sum="Total Geral" NA LISTA
+
+    O campo total na lista de abastecimentos inclui sum="Total Geral". 
+    Isso exibe automaticamente a soma de todos os abastecimentos visíveis 
+    no rodapé da lista. Quando o usuário aplica filtros (ex: "este mês" ou 
+    "por equipamento"), o total se ajusta dinamicamente, funcionando como 
+    um mini-relatório integrado.
+
+3.7 — FILTROS DE DATA NA SEARCH VIEW
+
+    Implementei 3 filtros de data prontos: Hoje, Esta Semana e Este Mês, 
+    usando context_today() e datetime.timedelta. Esses são os filtros mais 
+    comuns em operações diárias. O operador pode ver rapidamente os 
+    abastecimentos do dia ou do mês corrente sem precisar configurar datas 
+    manualmente.
+
+3.8 — AGRUPAMENTOS (GROUP BY)
+
+    A search view de abastecimentos oferece agrupamentos por Equipamento, 
+    Motorista, Tanque, Mês e Estado. Isso permite análises operacionais 
+    diretamente na lista, sem precisar de relatórios separados. Por 
+    exemplo: agrupar por Equipamento mostra o consumo de cada veículo; 
+    agrupar por Mês mostra a evolução temporal do consumo.
+
+3.9 — HIERARQUIA DE MENUS
+
+    Os menus seguem a estrutura: menu raiz "Combustível" com dois 
+    submenus — "Operações" (acesso geral) e "Configuração" (apenas 
+    gerentes). Separar configuração (tanques) de operação (abastecimentos 
+    e entradas) é padrão no Odoo e reflete boas práticas de UX: o 
+    operador diário não precisa ver opções de configuração, e o gerente 
+    tem acesso a tudo.
+
+    O menu de Configuração usa groups="group_combustivel_manager" para 
+    restringir visibilidade. Isso vai além do ACL — o usuário simplesmente 
+    não vê a opção de menu, reduzindo confusão visual.
+
+3.10 — FILTRO PADRÃO SEARCH_DEFAULT_DONE
+
+    O action de abastecimentos define context={'search_default_done': 1}, 
+    que ativa automaticamente o filtro "Confirmados" ao abrir a lista. 
+    Isso garante que, por padrão, o operador veja apenas abastecimentos 
+    reais (confirmados) e não rascunhos ou cancelados. Ele pode desativar 
+    o filtro a qualquer momento se quiser ver tudo.
+
+
+================================================================================
+4. SEGURANÇA E PERMISSÕES (Fase 4)
+================================================================================
+
+4.1 — HIERARQUIA DE GRUPOS COM implied_ids
+
+    Criamos dois grupos: Usuário de Combustível e Gerente de Combustível.
+    O gerente herda automaticamente do usuário via implied_ids. Isso 
+    significa que ao conceder o grupo "Gerente" a um usuário, o Odoo 
+    automaticamente concede também o grupo "Usuário". Esse é o padrão 
+    usado por TODOS os módulos oficiais do Odoo (Sales User → Sales 
+    Manager, Purchase User → Purchase Manager, etc.).
+
+    A alternativa seria criar grupos independentes sem herança, mas isso 
+    exigiria que o administrador concedesse ambos os grupos manualmente, 
+    o que é propenso a esquecimento e erros.
+
+    Ambos os grupos herdam de base.group_user (usuário interno do Odoo), 
+    garantindo que apenas usuários internos tenham acesso ao módulo.
+
+4.2 — USUÁRIO NÃO PODE DELETAR ABASTECIMENTOS
+
+    Na matriz de ACLs, o grupo "Usuário" tem perm_unlink=0 para 
+    abastecimentos. Essa decisão é crítica para a integridade do estoque. 
+    Se um operador pudesse excluir um abastecimento confirmado, o estoque 
+    do tanque seria recalculado (estoque subiria), mas não haveria rastro 
+    do porquê. Isso criaria discrepâncias na conciliação.
+
+    Apenas gerentes podem excluir registros, e mesmo assim a exclusão 
+    recalcula o estoque automaticamente graças ao campo computado.
+
+4.3 — USUÁRIO NÃO PODE CRIAR ENTRADAS
+
+    O grupo "Usuário" tem perm_create=0, perm_write=0 e perm_unlink=0 
+    para entradas de combustível. Apenas gerentes podem registrar 
+    recebimentos no tanque. A justificativa é de controle: se um operador 
+    pudesse criar entradas arbitrárias, ele poderia inflar o estoque 
+    artificialmente para mascarar retiradas não registradas.
+
+    O usuário pode LER entradas (perm_read=1) porque precisa consultar o 
+    histórico de recebimentos como parte do seu trabalho diário.
+
+4.4 — TANQUES SÓ PARA GERENTES
+
+    Tanques representam infraestrutura física. Criar, editar ou excluir 
+    um tanque é uma ação administrativa, não operacional. Por isso, apenas 
+    o gerente tem permissão completa. O usuário pode apenas visualizar os 
+    tanques, o que é necessário para selecionar o tanque ao criar um 
+    abastecimento.
+
+4.5 — SEQUÊNCIA DE ABASTECIMENTOS
+
+    Implementei uma sequência automática (ir.sequence) com o formato 
+    ABAST/2026/00001. A sequência inclui o ano (%(year)s) como prefixo e 
+    reinicia implicitamente a cada ano.
+
+    Decisão importante: a sequência é gerada no momento da CONFIRMAÇÃO 
+    (action_confirm), não na criação do rascunho. Isso evita buracos na 
+    numeração. Se a sequência fosse gerada no create(), rascunhos 
+    excluídos antes da confirmação consumiriam números, criando "buracos" 
+    (ex: ABAST/2026/00001, ABAST/2026/00003 — cadê o 00002?). 
+    Em contextos fiscais, buracos na numeração podem gerar questionamentos.
+
+
+================================================================================
+5. INTEGRAÇÃO COM FLEET (Fase 5)
+================================================================================
+
+5.1 — REUTILIZAÇÃO DO fleet.vehicle
+
+    O desafio pede "integração com equipamentos/placas cadastrados no 
+    Odoo". O módulo Fleet está disponível no Odoo Community e fornece 
+    o modelo fleet.vehicle com campos como placa (license_plate), modelo 
+    do veículo (model_id), marca, odômetro e estado do veículo.
+
+    A decisão de usar Many2one('fleet.vehicle') em vez de criar um modelo 
+    próprio de equipamentos segue o princípio DRY (Don't Repeat Yourself).
+    Criar um modelo próprio significaria:
+    - Duplicar todos os dados que já existem no Fleet
+    - Manter dois cadastros sincronizados manualmente
+    - Perder a integração com outros módulos que já usam fleet.vehicle
+
+    A dependência 'fleet' no manifest é obrigatória e explícita.
+
+5.2 — NÃO ESTENDER fleet.vehicle
+
+    Optei por NÃO herdar (_inherit) o modelo fleet.vehicle para adicionar 
+    campos como "total de combustível consumido". Essa informação pode ser 
+    obtida por consulta (search) no modelo de abastecimento, sem necessidade 
+    de modificar o Fleet. Estender modelos de terceiros adiciona 
+    complexidade de manutenção e potenciais conflitos com atualizações.
+
+    Num módulo mais maduro, seria útil adicionar um smart button no 
+    formulário do fleet.vehicle para ver os abastecimentos daquele veículo. 
+    Isso é uma melhoria possível documentada no README.
+
+
+================================================================================
+6. INTEGRAÇÃO COM COMPRAS (Fase 6 — Diferencial)
+================================================================================
+
+6.1 — HERANÇA DE stock.picking (NÃO purchase.order)
+
+    A integração com compras herda stock.picking e estende button_validate(),
+    não purchase.order. O motivo é semântico e técnico: o recebimento 
+    FÍSICO do combustível ocorre no momento da validação do picking de 
+    entrada (tipo "incoming"), não no momento da confirmação do pedido de 
+    compra. O pedido de compra é um compromisso comercial; o picking é a 
+    movimentação física.
+
+    Herdar purchase.order seria prematuro: a empresa pode fazer um pedido 
+    hoje e receber daqui a uma semana. O estoque só deve ser atualizado 
+    quando o combustível é fisicamente recebido.
+
+6.2 — IDENTIFICAÇÃO POR CATEGORIA DE PRODUTO
+
+    Para identificar se um produto é combustível, verifico se a categoria 
+    do produto (product.categ_id.name) é 'Combustível'. As alternativas 
+    descartadas foram:
+
+    - Campo Boolean no product.template: poluiria o modelo de produto com 
+      um campo específico de um módulo customizado. Outros módulos não 
+      saberiam o que fazer com esse campo.
+    
+    - Verificação por nome do produto: extremamente frágil. Se alguém 
+      renomear o produto de "Diesel S10" para "Óleo Diesel S10", a 
+      integração quebraria silenciosamente.
+
+    A categoria é a abordagem mais robusta porque é um dado estrutural. 
+    É necessário que o administrador crie a categoria "Combustível" e 
+    atribua os produtos relevantes a ela, o que está documentado.
+
+6.3 — SMART BUTTON NO PICKING
+
+    Adicionei um smart button (oe_stat_button) no formulário do 
+    stock.picking que mostra quantas entradas de combustível foram geradas 
+    por aquele recebimento. O botão usa o ícone fa-tint (gota) e só aparece 
+    quando há entradas vinculadas (invisible="combustivel_entrada_count == 0").
+
+    Ao clicar no botão, o operador é redirecionado para a lista de 
+    entradas de combustível filtrada por referência ao picking. Isso 
+    permite rastreabilidade bidirecional: do tanque ao pedido de compra 
+    e vice-versa.
+
+6.4 — RASTREABILIDADE VIA CAMPO referencia
+
+    Cada entrada de combustível criada automaticamente pela integração 
+    recebe no campo referencia o valor f'Compra: {picking.name}' 
+    (ex: "Compra: WH/IN/00001"). Isso permite rastrear a origem da 
+    entrada até o recebimento específico e, a partir dele, até o pedido 
+    de compra e a nota fiscal.
+
+6.5 — SELEÇÃO DO TANQUE
+
+    Quando a integração cria uma entrada automática, ela busca o primeiro 
+    tanque ativo (search com limit=1). Essa abordagem é adequada para o 
+    escopo atual (empresa com um tanque principal de 6.000L). Numa 
+    evolução do módulo, seria possível adicionar um campo no picking ou 
+    no produto para especificar qual tanque deve receber o combustível.
+
+
+================================================================================
+7. DOCUMENTAÇÃO E ENTREGA (Fase 7)
+================================================================================
+
+7.1 — DOCUMENTAÇÃO POR FASE
+
+    Cada fase de desenvolvimento gerou um documento .md que registra 
+    as decisões tomadas naquela etapa. Essa abordagem serve como memória 
+    de decisão e facilita a discussão durante a entrevista técnica. 
+    Se o avaliador perguntar "por que você fez X?", a resposta estará 
+    documentada e acessível.
+
+7.2 — PROPOSTA NF-e COM 3 OPÇÕES
+
+    A proposta de integração NF-e/NFS-e analisa 3 abordagens:
+    
+    Opção 1 — OCA l10n-brazil: módulos da comunidade, robusto mas complexo.
+    Opção 2 — API de terceiros (SaaS): rápido de implementar, custo mensal.
+    Opção 3 — Custom com PyNFe: controle total, manutenção complexa.
+
+    Apresentei prós e contras de cada uma e recomendação por cenário. 
+    Isso demonstra visão sistêmica: entender que o módulo de combustível 
+    não existe isolado, mas dentro de um ecossistema fiscal brasileiro.
+
+    Também propus campos adicionais concretos (nfe_numero, nfe_chave, 
+    nfe_data_emissao) e um fluxo integrado, mostrando que a proposta 
+    não é apenas teórica, mas implementável.
+
+7.3 — README COMO DOCUMENTAÇÃO PRINCIPAL
+
+    O README.md serve como ponto de entrada para qualquer pessoa que 
+    encontre o módulo. Inclui: visão geral, estrutura de diretórios, 
+    diagrama ER, tabela de decisões técnicas, lista de melhorias possíveis, 
+    dificuldades encontradas e instruções de instalação. Segue o padrão 
+    de projetos open source maduros.
+
+
+================================================================================
+8. DECISÕES TRANSVERSAIS
+================================================================================
+
+8.1 — IDIOMA PT-BR NAS STRINGS, INGLÊS NOS NOMES TÉCNICOS
+
+    Todas as strings voltadas ao usuário (labels, help, mensagens de erro) 
+    estão em português brasileiro, enquanto nomes técnicos (nomes de 
+    modelos, campos, métodos) estão em português por serem termos de 
+    domínio. Os nomes de métodos Odoo padrão (create, write, button_validate) 
+    permanecem em inglês por convenção.
+
+8.2 — DOCSTRINGS EM TODAS AS CLASSES E MÉTODOS
+
+    Cada classe e método público possui docstring explicando seu propósito 
+    e, quando relevante, as decisões técnicas envolvidas. Isso facilita 
+    a manutenção por outros desenvolvedores e demonstra maturidade 
+    profissional.
+
+8.3 — SEPARAÇÃO POR SEÇÕES COM COMENTÁRIOS
+
+    Dentro de cada arquivo Python, os campos, métodos computados, 
+    constraints e actions são separados por blocos de comentários com 
+    linhas de traço (# ------). Esse é o padrão visual das coding 
+    guidelines do Odoo, que facilita a navegação em arquivos longos.
+
+
+================================================================================
+RESUMO PARA DEFESA RÁPIDA
+================================================================================
+
+Se o avaliador pedir para resumir em uma frase cada decisão-chave:
+
+1. ESTOQUE COMPUTADO: "Garante integridade — recalcula a partir dos dados."
+2. store=True: "Permite que campos calculados sejam usados em SQL."
+3. valor_litro 4 decimais: "Reflete a realidade do preço na bomba."
+4. motorista como partner: "Inclui terceirizados sem login no sistema."
+5. Grupos com herança: "Padrão Odoo — Manager herda User automaticamente."
+6. User não deleta: "Protege o estoque contra remoções acidentais."
+7. stock.picking override: "Ponto exato do recebimento físico."
+8. Categoria de produto: "Identifica combustível de forma estrutural."
+9. @api.depends (não onchange): "Funciona tanto na UI quanto via API."
+10. Sequência na confirmação: "Evita buracos na numeração."
+
+================================================================================
+                        FIM DA DEFESA TÉCNICA
+================================================================================
