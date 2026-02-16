@@ -3,7 +3,7 @@
                          Odoo 19.0 Community Edition
 ================================================================================
 
-Este documento apresenta, de forma verbal e detalhada, todas as decisões 
+Este documento apresenta, de forma detalhada, todas as decisões 
 técnicas tomadas durante o desenvolvimento do módulo controle_combustivel.
 Cada decisão é acompanhada de sua justificativa, alternativas consideradas
 e o motivo pelo qual foram descartadas.
@@ -60,8 +60,8 @@ Destinado a embasar a defesa técnica perante a banca avaliadora.
     Marquei o módulo como application=True no manifest. Isso cria uma 
     entrada dedicada no menu principal do Odoo, o que é apropriado porque 
     o controle de combustível é uma funcionalidade autônoma, não uma 
-    extensão marginal de outro módulo. Para o avaliador, isso mostra que 
-    entendo a diferença entre um módulo "application" e um módulo utilitário.
+    extensão marginal de outro módulo. Diferenciando de um módulo "application" 
+    e um módulo utilitário.
 
 1.6 — LICENÇA LGPL-3
 
@@ -334,8 +334,25 @@ Destinado a embasar a defesa técnica perante a banca avaliadora.
     exigiria que o administrador concedesse ambos os grupos manualmente, 
     o que é propenso a esquecimento e erros.
 
-    Ambos os grupos herdam de base.group_user (usuário interno do Odoo), 
-    garantindo que apenas usuários internos tenham acesso ao módulo.
+    DECISÃO IMPORTANTE — AUTO-ATRIBUIÇÃO VIA base.group_user:
+
+    Além da hierarquia Manager → User, configuramos o grupo 
+    base.group_user (usuário interno do Odoo) para implicar 
+    automaticamente group_combustivel_user. Isso garante que TODOS os 
+    usuários internos recebam acesso básico ao módulo no momento da 
+    instalação, sem necessidade de configuração manual.
+
+    De forma análoga, base.group_system (administrador) implica 
+    group_combustivel_manager, dando acesso completo ao admin 
+    automaticamente.
+
+    ABORDAGEM DESCARTADA (implied_ids no grupo customizado):
+    A primeira versão usava implied_ids no group_combustivel_user 
+    apontando para base.group_user. Isso significava apenas que membros 
+    do nosso grupo TAMBÉM seriam usuários internos — mas NÃO o contrário.
+    O resultado era que nenhum usuário recebia o grupo automaticamente, 
+    exigindo atribuição manual e causando erros de acesso ("Você não tem 
+    permissão para acessar registros de Tanque de Combustível").
 
 4.2 — USUÁRIO NÃO PODE DELETAR ABASTECIMENTOS
 
@@ -552,7 +569,7 @@ Se o avaliador pedir para resumir em uma frase cada decisão-chave:
 2. store=True: "Permite que campos calculados sejam usados em SQL."
 3. valor_litro 4 decimais: "Reflete a realidade do preço na bomba."
 4. motorista como partner: "Inclui terceirizados sem login no sistema."
-5. Grupos com herança: "Padrão Odoo — Manager herda User automaticamente."
+5. Grupos com herança: "Manager herda User, e base.group_user auto-atribui User a todos."
 6. User não deleta: "Protege o estoque contra remoções acidentais."
 7. stock.picking override: "Ponto exato do recebimento físico."
 8. Categoria de produto: "Identifica combustível de forma estrutural."

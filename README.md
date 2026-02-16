@@ -47,7 +47,8 @@ controle_combustivel/
 │   └── proposta_nfe.md
 └── static/
     └── description/
-        └── icon.png               # Ícone do módulo
+        ├── icon.png               # Ícone do módulo (PNG)
+        └── icon.svg               # Ícone do módulo (SVG fonte)
 ```
 
 ---
@@ -101,7 +102,7 @@ Registra cada recebimento de combustível no tanque, com campo de referência pa
 | `motorista_id` | `Many2one('res.partner')` | Permite motoristas terceirizados sem login no sistema |
 | `responsavel_id` | `Many2one('res.users')` | Sempre é um operador do sistema com acesso |
 | Referência equipamento | `Many2one('fleet.vehicle')` | Reutiliza cadastro existente do Odoo, evita duplicação |
-| Hierarquia de grupos | Manager herda User (`implied_ids`) | Padrão Odoo: concessão automática de permissões base |
+| Hierarquia de grupos | Manager herda User (`implied_ids`), `base.group_user` implica User, `base.group_system` implica Manager | Padrão Odoo: todos os usuários internos recebem acesso básico automaticamente |
 | Usuário: deletar abastecimento | Proibido (`perm_unlink=0`) | Evita inconsistência de estoque |
 | Workflow | `draft → done → cancel` | Permite revisão antes de afetar estoque |
 | Integração compras | Herança `stock.picking.button_validate()` | Ponto exato do recebimento físico |
@@ -121,20 +122,42 @@ Registra cada recebimento de combustível no tanque, com campo de referência pa
 
 ## Dificuldades e Aprendizados
 
-*(Preencher durante o desenvolvimento com dificuldades reais encontradas)*
-
-- Configuração do ambiente Odoo 19.0
-- Entendimento da relação entre `store=True` e `@api.depends`
-- Testes de integração com o módulo Fleet
-- Debugging de permissões e ACLs
+- **Configuração do ambiente Docker/Odoo 19.0** — O healthcheck do PostgreSQL precisou ser ajustado para verificar o banco correto (`-d postgres`). Volumes nomeados foram necessários no Windows para evitar problemas com PGDATA.
+- **Permissões e grupos de segurança** — O `implied_ids` no Odoo funciona de forma não-intuitiva: para auto-atribuir um grupo a todos os usuários internos, é necessário modificar `base.group_user` para implicar o grupo customizado (e não o contrário). O grupo do módulo implicando `base.group_user` apenas garante que membros do grupo são usuários internos, sem reciprocidade.
+- **Ícone do módulo** — O Odoo 19.0 exige que o campo `web_icon` do menu raiz aponte para um PNG válido em `static/description/icon.png`. A ausência do arquivo impede a exibição no app switcher.
+- **Tradução pt_BR nos menus** — O Odoo 19.0 armazena nomes de menus em JSONB multidioma. Menus sem tradução `pt_BR` podem não aparecer corretamente em interfaces configuradas em português.
 
 ---
 
 ## Como Instalar
 
-1. **Clone o repositório** na pasta de addons customizados:
+### Via Docker (recomendado)
+
+1. **Clone o repositório:**
    ```bash
-   git clone <url-repositorio> /opt/odoo/custom_addons/controle_combustivel
+   git clone <url-repositorio>
+   cd Desafio\ Machado\ ERP
+   ```
+
+2. **Suba os containers:**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Na primeira execução**, acesse http://localhost:8069 e crie o banco de dados:  
+   - Database Name: `odoo_machado`
+   - Email: `admin@admin.com`
+   - Password: escolha uma senha
+
+4. **Instale o módulo** pelo painel de Apps (busque "Combustível")
+
+5. **Pré-requisitos:** os módulos **Fleet** e **Purchase** devem estar instalados antes.
+
+### Via instalação local (alternativa)
+
+1. **Copie o módulo** para a pasta de addons:
+   ```bash
+   cp -r controle_combustivel /opt/odoo/custom_addons/
    ```
 
 2. **Configure o `addons_path`** no `odoo.conf`:
@@ -142,14 +165,7 @@ Registra cada recebimento de combustível no tanque, com campo de referência pa
    addons_path = /opt/odoo/odoo/addons,/opt/odoo/custom_addons
    ```
 
-3. **Reinicie o Odoo** e atualize a lista de módulos:
-   ```bash
-   sudo systemctl restart odoo
-   ```
-
-4. **Instale o módulo** pelo painel de Apps (busque "Combustível")
-
-5. **Pré-requisitos:** os módulos **Fleet** e **Purchase** devem estar instalados antes.
+3. **Reinicie o Odoo** e instale pelo painel de Apps.
 
 ---
 

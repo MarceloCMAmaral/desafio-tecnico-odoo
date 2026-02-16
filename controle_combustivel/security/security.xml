@@ -2,12 +2,11 @@
 <odoo>
     <!-- ================================================================== -->
     <!-- Grupos de segurança                                                 -->
-    <!-- Decisão: hierarquia com implied_ids. O gerente herda do usuário.   -->
-    <!-- Padrão Odoo: Sales User → Sales Manager.                           -->
+    <!-- Padrão Odoo: grupo usuário é auto-atribuído a todos os internal    -->
+    <!-- users, e o admin recebe o grupo gerente automaticamente.            -->
     <!-- ================================================================== -->
     <record id="group_combustivel_user" model="res.groups">
         <field name="name">Usuário de Combustível</field>
-        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
         <field name="comment">
             Pode registrar abastecimentos e visualizar tanques e entradas.
             Não pode excluir abastecimentos nem gerenciar entradas/tanques.
@@ -21,6 +20,16 @@
             Acesso completo: CRUD em todos os modelos do módulo.
             Pode gerenciar tanques, registrar entradas e excluir abastecimentos.
         </field>
+    </record>
+
+    <!-- Auto-atribuir: todos os usuários internos recebem o grupo usuário -->
+    <record id="base.group_user" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_combustivel_user'))]"/>
+    </record>
+
+    <!-- Admin recebe automaticamente o grupo gerente -->
+    <record id="base.group_system" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_combustivel_manager'))]"/>
     </record>
 
     <!-- ================================================================== -->
