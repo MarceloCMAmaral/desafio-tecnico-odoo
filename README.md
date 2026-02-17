@@ -36,7 +36,7 @@ controle_combustivel/
 ├── data/
 │   └── tanque_data.xml            # Tanque padrão de 6.000L
 ├── docs/                          # Documentação técnica
-│   ├── ambiente_tecnico.md
+│   ├── defesa_tecnica.txt
 │   └── proposta_nfe.md
 └── static/
     └── description/
@@ -171,4 +171,4 @@ Registra cada recebimento de combustível no tanque, com campo de referência pa
 
 ---
 
-*Desenvolvido como parte do processo seletivo da Machado Pré-Moldados.*
+*Desenvolvido como parte do processo seletivo - Machado ERP.*
