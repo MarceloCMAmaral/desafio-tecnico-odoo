@@ -35,14 +35,7 @@ controle_combustivel/
 │   └── ir.model.access.csv        # Matriz de permissões (ACLs)
 ├── data/
 │   └── tanque_data.xml            # Tanque padrão de 6.000L
-├── docs/                          # Documentação técnica por fase
-│   ├── fase1_estrutura.md
-│   ├── fase2_modelos.md
-│   ├── fase3_views.md
-│   ├── fase4_seguranca.md
-│   ├── fase5_fleet.md
-│   ├── fase6_compras.md
-│   ├── fase7_entrega.md
+├── docs/                          # Documentação técnica
 │   ├── ambiente_tecnico.md
 │   └── proposta_nfe.md
 └── static/
