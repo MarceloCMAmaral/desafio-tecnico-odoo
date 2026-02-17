@@ -1,5 +1,5 @@
 ================================================================================
-            DEFESA TÉCNICA DETALHADA — MÓDULO CONTROLE DE COMBUSTÍVEL
+            DEFESA TÉCNICA — MÓDULO CONTROLE DE COMBUSTÍVEL
                          Odoo 19.0 Community Edition
 ================================================================================
 
@@ -7,9 +7,6 @@ Este documento apresenta, de forma detalhada, todas as decisões
 técnicas tomadas durante o desenvolvimento do módulo controle_combustivel.
 Cada decisão é acompanhada de sua justificativa, alternativas consideradas
 e o motivo pelo qual foram descartadas.
-
-Destinado a embasar a defesa técnica perante a banca avaliadora.
-
 
 ================================================================================
 1. ESTRUTURA DO MÓDULO (Fase 1)
@@ -26,7 +23,7 @@ Destinado a embasar a defesa técnica perante a banca avaliadora.
     A alternativa seria colocar todos os modelos em um único arquivo 
     models.py. Descartei essa abordagem porque, à medida que os modelos 
     crescem, o arquivo se tornaria difícil de navegar. Em projetos reais,
-    módulos Odoo maduros sempre separam os modelos.
+    módulos Odoo maduros separam os modelos.
 
 1.2 — VERSIONAMENTO OCA (19.0.1.0.0)
 
