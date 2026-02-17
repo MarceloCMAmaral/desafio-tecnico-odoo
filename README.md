@@ -128,7 +128,7 @@ Registra cada recebimento de combustível no tanque, com campo de referência pa
 
 1. **Clone o repositório:**
    ```bash
-   git clone <url-repositorio>
+   git clone <https://github.com/MarceloCMAmaral/desafio-tecnico-odoo.git>
    cd Desafio\ Machado\ ERP
    ```
 
